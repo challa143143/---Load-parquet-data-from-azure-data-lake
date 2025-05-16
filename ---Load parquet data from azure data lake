@@ -1,0 +1,255 @@
+---Load parquet data from azure data lake
+
+
+
+
+
+*Parquet is one oaf the widely used format when talk about the semi      structured files.
+
+*lets suppose its consuming 10mb space or your storage for csv file .if 
+
+ you use the same data  in a parquet file , it will just consume around 2 to   2.5mb space or storage since it stores 70 to 80 percent in a compressed data if you are storing in a parquet format.
+
+*Basically parquet file will always have one column and we are accessing all the values from one column itself that’s why we are using $1 for all of the values of the columns
+
+*At the end we also adding additional parameters metadata$filename(from which we are copying the data)it can automatically taken by the system variables of snowflake metadata$filename, also metadata$file_row_number to time_stamp nth
+
+
+
+
+
+
+
+
+
+-------------------------- STEPS NOT REQUIRED IF AZURE INTEGRATION OBJECT IS ALREADY CREATED ------------------------------------
+
+--CREATE INTEGRATION OBJECT FOR EXTERNAL STAGE
+
+CREATE STORAGE INTEGRATION AZURE_INT
+
+  TYPE = EXTERNAL_STAGE
+
+  STORAGE_PROVIDER = AZURE
+
+  ENABLED = TRUE
+
+  AZURE_TENANT_ID = '3cc2b476-326d-4535-80e0-6ecb52829440'
+
+STORAGE_ALLOWED_LOCATIONS = ('azure://snowflakeazuretest123.blob.core.windows.net/snowflake-test-csv/', 'azure://snowflakeazuretest123.blob.core.windows.net/snowflake-test-parquet/');
+
+
+
+  --STORAGE_BLOCKED_LOCATIONS = ('AZURE://MYACCOUNT.BLOB.CORE.WINDOWS.NET/MYCONTAINER1/MYPATH1/SENSITIVEDATA/', 'AZURE://MYACCOUNT.BLOB.CORE.WINDOWS.NET/MYCONTAINER2/MYPATH2/SENSITIVEDATA/');
+
+  
+
+--DESCRIBE INTEGRATION OBJECT TO AUTHORIZE SNOWFLAKE TO FETCH DATA FROM AZURE STORAGE ACCOUNTS
+
+
+
+DESC STORAGE INTEGRATION AZURE_INT;
+
+----------------------------------------------------------------------------------------------------------------------------------
+
+
+
+------------- LOAD PARQUET DATA -------------
+
+CREATE or replace TABLE AZURE_HEALTHCARE_PARQUET(
+
+    AVERAGE_COVERED_CHARGES    VARCHAR(150)  
+
+   ,AVERAGE_TOTAL_PAYMENTS    VARCHAR(150)  
+
+   ,TOTAL_DISCHARGES    VARCHAR(150)   
+
+   ,BACHELORORHIGHER    VARCHAR(150)   
+
+   ,HSGRADORHIGHER    VARCHAR(150)   
+
+   ,TOTALPAYMENTS    VARCHAR(128)  
+
+   ,REIMBURSEMENT    VARCHAR(128)  
+
+   ,TOTAL_COVERED_CHARGES    VARCHAR(128) 
+
+   ,REFERRALREGION_PROVIDER_NAME    VARCHAR(256)  
+
+   ,REIMBURSEMENTPERCENTAGE    VARCHAR(150)   
+
+   ,DRG_DEFINITION    VARCHAR(256)  
+
+   ,REFERRAL_REGION    VARCHAR(26)  
+
+   ,INCOME_PER_CAPITA    VARCHAR(150)   
+
+   ,MEDIAN_EARNINGSBACHELORS    VARCHAR(150)   
+
+   ,MEDIAN_EARNINGS_GRADUATE    VARCHAR(150) 
+
+   ,MEDIAN_EARNINGS_HS_GRAD    VARCHAR(150)   
+
+   ,MEDIAN_EARNINGSLESS_THAN_HS    VARCHAR(150) 
+
+   ,MEDIAN_FAMILY_INCOME    VARCHAR(150)   
+
+   ,NUMBER_OF_RECORDS    VARCHAR(150)  
+
+   ,POP_25_OVER    VARCHAR(150)  
+
+   ,PROVIDER_CITY    VARCHAR(128)  
+
+   ,PROVIDER_ID    VARCHAR(150)   
+
+   ,PROVIDER_NAME    VARCHAR(256)  
+
+   ,PROVIDER_STATE    VARCHAR(128)  
+
+   ,PROVIDER_STREET_ADDRESS    VARCHAR(256)  
+
+   ,PROVIDER_ZIP_CODE    VARCHAR(150) 
+
+   ,filename    VARCHAR
+
+   ,file_row_number VARCHAR
+
+ ,load_timestamp timestamp default TO_TIMESTAMP_NTZ(current_timestamp)
+
+);
+
+
+
+--create parquet file format
+
+create or replace file format db.public.parquet_format
+
+  type = 'parquet';
+
+  
+
+-- CREATE STAGE OBJECT TO LET SNOWFLAKE KNOW FROM WHERE TO PICK THE FILES
+
+CREATE OR REPLACE STAGE DB.PUBLIC.MY_AZURE_PARQUET_STAGE
+
+STORAGE_INTEGRATION = AZURE_INT
+
+URL = 'azure://snowflakeazuretest123.blob.core.windows.net/snowflake-test-parquet/health.parquet'
+
+FILE_FORMAT = PARQUET_FORMAT;
+
+  
+
+-- USE COPY COMMAND TO INGEST DATA FROM AZURE
+
+-- LOAD PARQUET DATA BY CONVERTING INTO STRUCTURED FORMAT
+
+copy into db.public.AZURE_HEALTHCARE_PARQUET
+
+from (select 
+
+$1:average_covered_charges::varchar,
+
+$1:average_total_payments::varchar,
+
+$1:total_discharges::varchar,
+
+$1:"PERCENT_Bachelor's_or_Higher"::varchar,
+
+$1:percent_hs_grad_or_higher::varchar,
+
+$1:total_payments::varchar,
+
+$1:percent_reimbursement::varchar,
+
+$1:total_covered_charges::varchar,
+
+$1:referral_region_provider_name::varchar,
+
+$1:reimbursement_percentage::varchar,
+
+$1:drg_definition::varchar,
+
+$1:referral_region::varchar,
+
+$1:income_per_capita::varchar,
+
+$1:median_earnings_bachelors::varchar,
+
+$1:median_earnings_graduate::varchar,
+
+$1:median_earnings_hs_grad::varchar,
+
+$1:median_earnings_less_than_hs::varchar,
+
+$1:median_family_income::varchar,
+
+$1:number_of_records::varchar,
+
+$1:pop_25_over::varchar,
+
+$1:provider_city::varchar,
+
+$1:provider_id::varchar,
+
+$1:provider_name::varchar,
+
+$1:provider_state::varchar,
+
+$1:provider_street_address::varchar,
+
+$1:provider_zip_code::varchar,
+
+METADATA$FILENAME,
+
+METADATA$FILE_ROW_NUMBER,
+
+TO_TIMESTAMP_NTZ(current_timestamp)
+
+from @db.public.MY_AZURE_PARQUET_STAGE);
+
+
+
+select * from AZURE_HEALTHCARE_PARQUET;
+
+
+
+---so this is the process to tranform a semi structured data to structured form when working on snowflake
+
+
+
+--*now lets understand the data being loaded from the file as we already know that the parquet data will be loaded onlu in one column and that column is considered parquent_temp_data and it cannot be a varachar column it should be a variant column datatype which will accept the semistructured ( json ,xml,parquet) file formats
+
+
+
+
+
+
+
+---*1-- LOAD PARQUET DATA WITHOUT CONVERTING INTO STRUCTURED FORMAT
+
+CREATE or replace TABLE HEALTHCARE_PARQUET_DEMO(
+
+    parquet_temp_data VARIANT
+
+   ,filename    VARCHAR
+
+   ,file_row_number VARCHAR
+
+   ,load_timestamp timestamp default TO_TIMESTAMP_NTZ(current_timestamp)
+
+);
+
+---*2 load data into table
+
+copy into db.public.HEALTHCARE_PARQUET_DEMO
+
+from (select *,
+
+      METADATA$FILENAME,
+
+      METADATA$FILE_ROW_NUMBER,
+
+      TO_TIMESTAMP_NTZ(current_timestamp)
+
+from @db.public.MY_AZURE_PARQUET_STAGE);
